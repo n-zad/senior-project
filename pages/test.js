@@ -5,11 +5,30 @@ import utilStyles from "../styles/utils.module.css";
 
 export default function TestPage() {
   // define states
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [permissionStatus, setPermissionStatus] = useState([]);
   const [streamingStatus, setStreamingStatus] = useState(false);
-  const [audioStream, setAudioStream] = useState();
+  const [audioStreams, setAudioStreams] = useState([]);
   const [recordingStatus, setRecordingStatus] = useState("inactive");
   const [audioRecorder, setAudioRecorder] = useState();
   const [chunks, setChunks] = useState([]);
+
+  // update audioDevices when permision is given to include device names
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then((device_info_arr) => {
+      let temp = [];
+      device_info_arr.forEach((deviceInfo) => {
+        if (deviceInfo.kind == "audioinput") {
+          temp.push(deviceInfo);
+        }
+      });
+      setAudioDevices(temp);
+    });
+  }, [permissionStatus]);
+
+  useEffect(() => {
+    console.log("audio streams: ", audioStreams);
+  }, [audioStreams]);
 
   // console.log chunks when it is updated
   useEffect(() => {
@@ -20,32 +39,73 @@ export default function TestPage() {
   // AudioStream
   // ----------------------------------------
 
-  // function to request permission to microphone and start audio stream
-  async function startStream() {
-    if (!streamingStatus) {
-      // get user media
-      await navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          /* use the stream */
-          setAudioStream(stream);
-        })
-        .catch((err) => {
-          /* handle the error */
-          console.error(`${err.name}: ${err.message}`);
-        });
-    } else {
-      audioStream.getTracks()[0].enabled = true;
+  // function to create audio streams for each audio device
+  async function getAudioDevices() {
+    if (permissionStatus.length > 0) {
+      console.log("no-op, already have permission...");
+      return;
     }
-    setStreamingStatus(true);
-    console.log("start stream");
+
+    // get audio stream for each deviceId
+    audioDevices.forEach(async (deviceInfo) => {
+      await getAudioDevice(deviceInfo.deviceId).then(() => {
+        setPermissionStatus((permissionStatus) => [
+          ...permissionStatus,
+          deviceInfo.deviceId,
+        ]);
+      });
+    });
+  }
+
+  async function getAudioDevice(deviceInfo) {
+    // get user media
+    await navigator.mediaDevices
+      .getUserMedia({
+        audio: {
+          deviceId: deviceInfo,
+        },
+      })
+      .then((stream) => {
+        /* use the stream */
+        stream.getTracks()[0].enabled = false;
+        setAudioStreams((audioStreams) => [...audioStreams, stream]);
+      })
+      .catch((err) => {
+        /* handle the error */
+        console.error(`${err.name}: ${err.message}`);
+      });
+  }
+
+  // function to start audio streams
+  async function startStreams() {
+    // **assume user uses all audio input devices for now**
+    // if (!deviceOptions) {
+    //   console.log("select which devices to stream");
+    //   console.log(audioStreams);
+    // }
+
+    if (!streamingStatus) {
+      audioStreams.forEach((stream) => {
+        stream.getTracks()[0].enabled = true;
+      });
+      setStreamingStatus(true);
+      console.log("start stream with %d devices", audioStreams.length);
+    } else {
+      console.log("no-op, stream already started...");
+    }
   }
 
   // function to end audio stream
   function endStream() {
-    audioStream.getTracks()[0].enabled = false;
-    setStreamingStatus(false);
-    console.log("end stream");
+    if (streamingStatus) {
+      audioStreams.forEach((stream) => {
+        stream.getTracks()[0].enabled = false;
+      });
+      setStreamingStatus(false);
+      console.log("end stream with %d devices", audioStreams.length);
+    } else {
+      console.log("no-op, stream already ended...");
+    }
   }
 
   // ----------------------------------------
@@ -66,16 +126,44 @@ export default function TestPage() {
 
     // check if MediaRecorder object was already created
     if (!audioRecorder) {
-      const mediaRecorder = new MediaRecorder(audioStream, {
-        mimeType: "audio/webm; codecs=opus",
-        audioBitsPerSecond: 256000,
-      });
-      mediaRecorder.addEventListener("dataavailable", (e) => {
-        setChunks((chunks) => [...chunks, e.data]);
-        console.log("chunk pushed!");
-      });
-      mediaRecorder.start(1000);
-      setAudioRecorder(mediaRecorder);
+      // run old code if there's only 1 audio input device
+      if (audioStreams.length == 1) {
+        const mediaRecorder = new MediaRecorder(audioStream, {
+          mimeType: "audio/webm; codecs=opus",
+          audioBitsPerSecond: 256000,
+        });
+        mediaRecorder.addEventListener("dataavailable", (e) => {
+          setChunks((chunks) => [...chunks, e.data]);
+          console.log("chunk pushed!");
+        });
+        mediaRecorder.start(1000);
+        setAudioRecorder(mediaRecorder);
+      } else {
+        // merge audio streams using audio context
+        const audioContext = new AudioContext();
+
+        const audioIn = [];
+        audioStreams.forEach((stream) => {
+          audioIn.push(audioContext.createMediaStreamSource(stream));
+        });
+
+        const dest = audioContext.createMediaStreamDestination();
+
+        audioIn.forEach((audioInput) => {
+          audioInput.connect(dest);
+        });
+
+        const mediaRecorder = new MediaRecorder(dest.stream, {
+          mimeType: "audio/webm; codecs=opus",
+          audioBitsPerSecond: 256000,
+        });
+        mediaRecorder.addEventListener("dataavailable", (e) => {
+          setChunks((chunks) => [...chunks, e.data]);
+          console.log("chunk pushed!");
+        });
+        mediaRecorder.start(1000);
+        setAudioRecorder(mediaRecorder);
+      }
     } else {
       // start recording
       audioRecorder.start(1000);
@@ -113,46 +201,6 @@ export default function TestPage() {
   }
 
   // ----------------------------------------
-  // WASM Media Encoder
-  // ----------------------------------------
-
-  // async function encodeChunk(blob) {}
-
-  // ----------------------------------------
-  // AudioWorklet
-  // ----------------------------------------
-
-  // async function processAudio() {
-  //   const audioContext = new AudioContext();
-
-  //   try {
-  //     await audioContext.audioWorklet.addModule("/audio-encoder-processor.js");
-  //   } catch (error) {
-  //     console.log(error);
-  //     return;
-  //   }
-
-  //   console.log("added AudioWorklet module");
-
-  //   const mediaStreamSource = audioContext.createMediaStreamSource(audioStream);
-  //   const audioWorkletNode = new AudioWorkletNode(
-  //     audioContext,
-  //     "audio-encoder-processor"
-  //   );
-
-  //   console.log("created AudioWorkletNode");
-
-  //   audioWorkletNode.port.onmessage = (event) => {
-  //     const encodedData = event.data;
-  //     console.log(encodedData);
-  //     // append encodedData to a buffer or send it to a server
-  //   };
-
-  //   mediaStreamSource.connect(audioWorkletNode);
-  //   audioWorkletNode.connect(audioContext.destination);
-  // }
-
-  // ----------------------------------------
   // Helper functions
   // ----------------------------------------
 
@@ -185,8 +233,13 @@ export default function TestPage() {
       <section className={utilStyles.headingMd}>
         <p>Test Page</p>
       </section>
+      <div style={{ marginBottom: 20 }}>
+        <button onClick={getAudioDevices}>
+          Allow Permission to Audio Input Devices
+        </button>
+      </div>
       <div style={{ position: "relative", marginBottom: 20 }}>
-        <button onClick={startStream}>
+        <button onClick={startStreams}>
           Start Audio Stream ({displayStreamingStatus(true)})
         </button>
         <button onClick={endStream} style={{ marginLeft: 20 }}>
