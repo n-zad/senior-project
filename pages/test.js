@@ -12,6 +12,12 @@ export default function TestPage() {
   const [recordingStatus, setRecordingStatus] = useState("inactive");
   const [audioRecorder, setAudioRecorder] = useState();
   const [chunks, setChunks] = useState([]);
+  const [deviceList, setDeviceList] = useState(
+    <div style={{ fontSize: 16 }}>
+      (need device permissions in order to list devices)
+    </div>
+  );
+  const [deviceStream, setDeviceStream] = useState([]); // state to pair deviceId to audioStream
 
   // update audioDevices when permision is given to include device names
   useEffect(() => {
@@ -23,6 +29,9 @@ export default function TestPage() {
         }
       });
       setAudioDevices(temp);
+
+      // also update the list of available devices shown to the user
+      listDevices(temp);
     });
   }, [permissionStatus]);
 
@@ -69,6 +78,12 @@ export default function TestPage() {
         /* use the stream */
         stream.getTracks()[0].enabled = false;
         setAudioStreams((audioStreams) => [...audioStreams, stream]);
+
+        // add deviceId / audioStream pair
+        setDeviceStream((deviceStream) => [
+          ...deviceStream,
+          [deviceInfo, stream],
+        ]);
       })
       .catch((err) => {
         /* handle the error */
@@ -78,18 +93,27 @@ export default function TestPage() {
 
   // function to start audio streams
   async function startStreams() {
-    // **assume user uses all audio input devices for now**
-    // if (!deviceOptions) {
-    //   console.log("select which devices to stream");
-    //   console.log(audioStreams);
-    // }
-
     if (!streamingStatus) {
+      let devices = [];
       audioStreams.forEach((stream) => {
-        stream.getTracks()[0].enabled = true;
+        let device = "";
+        deviceStream.forEach((pair) => {
+          if (pair[1].id == stream.id) {
+            device = pair[0];
+          }
+        });
+        let checkbox = document.getElementById(device);
+        if (checkbox.checked) {
+          stream.getTracks()[0].enabled = true;
+          devices.push(device);
+        }
       });
-      setStreamingStatus(true);
-      console.log("start stream with %d devices", audioStreams.length);
+      if (devices.length > 0) {
+        setStreamingStatus(true);
+        console.log("start stream with devices: %s", devices);
+      } else {
+        console.log("no-op, no audio devices selected...");
+      }
     } else {
       console.log("no-op, stream already started...");
     }
@@ -98,11 +122,15 @@ export default function TestPage() {
   // function to end audio stream
   function endStream() {
     if (streamingStatus) {
+      let runningStreams = 0;
       audioStreams.forEach((stream) => {
+        if (stream.getTracks()[0].enabled) {
+          runningStreams++;
+        }
         stream.getTracks()[0].enabled = false;
       });
       setStreamingStatus(false);
-      console.log("end stream with %d devices", audioStreams.length);
+      console.log("end stream with %d devices", runningStreams);
     } else {
       console.log("no-op, stream already ended...");
     }
@@ -221,6 +249,26 @@ export default function TestPage() {
     audioElement.controls = true;
   }
 
+  // update deviceList with available devices
+  function listDevices(devices) {
+    if (permissionStatus.length > 0) {
+      let temp = [];
+      devices.forEach((deviceInfo) => {
+        temp.push(deviceCheckbox(deviceInfo.deviceId, deviceInfo.label));
+      });
+      setDeviceList(<div>{temp}</div>);
+    }
+  }
+
+  function deviceCheckbox(device_id, device_name) {
+    return (
+      <div key={device_id}>
+        <input type="checkbox" id={device_id}></input> {device_name}
+        <br></br>
+      </div>
+    );
+  }
+
   // ----------------------------------------
   // returned Layout
   // ----------------------------------------
@@ -237,6 +285,10 @@ export default function TestPage() {
         <button onClick={getAudioDevices}>
           Allow Permission to Audio Input Devices
         </button>
+      </div>
+      <div style={{ fontSize: 18, marginBottom: 20 }}>
+        Available Audio Input Devices:<br></br>
+        {deviceList}
       </div>
       <div style={{ position: "relative", marginBottom: 20 }}>
         <button onClick={startStreams}>
