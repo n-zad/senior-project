@@ -3,6 +3,8 @@ import Head from "next/head";
 import Layout, { siteTitle } from "../components/layout";
 import utilStyles from "../styles/utils.module.css";
 
+const axios = require("axios");
+
 export default function TestPage() {
   // define states
   const [audioDevices, setAudioDevices] = useState([]);
@@ -18,6 +20,7 @@ export default function TestPage() {
     </div>
   );
   const [deviceStream, setDeviceStream] = useState([]); // state to pair deviceId to audioStream
+  const [audioBlob, setAudioBlob] = useState(null);
 
   // update audioDevices when permision is given to include device names
   useEffect(() => {
@@ -154,44 +157,29 @@ export default function TestPage() {
 
     // check if MediaRecorder object was already created
     if (!audioRecorder) {
-      // run old code if there's only 1 audio input device
-      if (audioStreams.length == 1) {
-        const mediaRecorder = new MediaRecorder(audioStream, {
-          mimeType: "audio/webm; codecs=opus",
-          audioBitsPerSecond: 256000,
-        });
-        mediaRecorder.addEventListener("dataavailable", (e) => {
-          setChunks((chunks) => [...chunks, e.data]);
-          console.log("chunk pushed!");
-        });
-        mediaRecorder.start(1000);
-        setAudioRecorder(mediaRecorder);
-      } else {
-        // merge audio streams using audio context
-        const audioContext = new AudioContext();
+      const audioContext = new AudioContext();
 
-        const audioIn = [];
-        audioStreams.forEach((stream) => {
-          audioIn.push(audioContext.createMediaStreamSource(stream));
-        });
+      const audioIn = [];
+      audioStreams.forEach((stream) => {
+        audioIn.push(audioContext.createMediaStreamSource(stream));
+      });
 
-        const dest = audioContext.createMediaStreamDestination();
+      const dest = audioContext.createMediaStreamDestination();
 
-        audioIn.forEach((audioInput) => {
-          audioInput.connect(dest);
-        });
+      audioIn.forEach((audioInput) => {
+        audioInput.connect(dest);
+      });
 
-        const mediaRecorder = new MediaRecorder(dest.stream, {
-          mimeType: "audio/webm; codecs=opus",
-          audioBitsPerSecond: 256000,
-        });
-        mediaRecorder.addEventListener("dataavailable", (e) => {
-          setChunks((chunks) => [...chunks, e.data]);
-          console.log("chunk pushed!");
-        });
-        mediaRecorder.start(1000);
-        setAudioRecorder(mediaRecorder);
-      }
+      const mediaRecorder = new MediaRecorder(dest.stream, {
+        mimeType: "audio/webm; codecs=opus",
+        audioBitsPerSecond: 256000,
+      });
+      mediaRecorder.addEventListener("dataavailable", (e) => {
+        setChunks((chunks) => [...chunks, e.data]);
+        console.log("chunk pushed!");
+      });
+      mediaRecorder.start(1000);
+      setAudioRecorder(mediaRecorder);
     } else {
       // start recording
       audioRecorder.start(1000);
@@ -229,6 +217,35 @@ export default function TestPage() {
   }
 
   // ----------------------------------------
+  // API-calling functions
+  // ----------------------------------------
+
+  async function uploadStream() {
+    if (audioBlob === null) {
+      console.log("no-op, recording not finished");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const audio_array_buffer = reader.result;
+      const audio_data = new Uint8Array(audio_array_buffer);
+      const audio_data_base64 = btoa(String.fromCharCode(...audio_data));
+
+      const response = await axios.post(`/api/stream`, {
+        data: audio_data_base64,
+      });
+
+      if (response.data.status == "success") {
+        console.log("audio superBlob successfully stored in the database");
+      } else {
+        console.log("err: POST request failed");
+      }
+    };
+    reader.readAsArrayBuffer(audioBlob);
+  }
+
+  // ----------------------------------------
   // Helper functions
   // ----------------------------------------
 
@@ -247,6 +264,9 @@ export default function TestPage() {
     const audioElement = document.getElementById("recordedAudio");
     audioElement.src = URL.createObjectURL(superBlob);
     audioElement.controls = true;
+
+    // store superBlob
+    setAudioBlob(superBlob);
   }
 
   // update deviceList with available devices
@@ -317,6 +337,9 @@ export default function TestPage() {
         <button onClick={playAudio}>Play Recorded Audio</button>
         <br></br>
         <audio id="recordedAudio" style={{ marginTop: 5 }}></audio>
+      </div>
+      <div style={{ marginTop: 20, marginBottom: 20 }}>
+        <button onClick={uploadStream}>Upload Audio to Database</button>
       </div>
     </Layout>
   );

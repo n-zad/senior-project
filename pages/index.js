@@ -30,8 +30,10 @@ export default function Home({ allPostsData }) {
       <section className={`${utilStyles.headingMd} ${utilStyles.padding1px}`}>
         <h2 className={utilStyles.headingLg}>Testing Audio Streaming</h2>
         <Link href={`/test`}>Over Here</Link>
+        <h2 className={utilStyles.headingLg}>Listen to Recent Streams</h2>
+        <Link href={`/streams`}>View Streams</Link>
       </section>
-      <section className={`${utilStyles.headingMd} ${utilStyles.padding1px}`}>
+      {/* <section className={`${utilStyles.headingMd} ${utilStyles.padding1px}`}>
         <h2 className={utilStyles.headingLg}>Blog</h2>
         <ul className={utilStyles.list}>
           {allPostsData.map(({ id, date, title }) => (
@@ -44,7 +46,7 @@ export default function Home({ allPostsData }) {
             </li>
           ))}
         </ul>
-      </section>
+      </section> */}
     </Layout>
   );
 }
