@@ -1,20 +1,9 @@
 import Head from "next/head";
 import Layout, { siteTitle } from "../components/layout";
 import utilStyles from "../styles/utils.module.css";
-import { getSortedPostsData } from "../lib/posts";
 import Link from "next/link";
-import Date from "../components/date";
 
-export async function getStaticProps() {
-  const allPostsData = getSortedPostsData();
-  return {
-    props: {
-      allPostsData,
-    },
-  };
-}
-
-export default function Home({ allPostsData }) {
+export default function Home() {
   return (
     <Layout home>
       <Head>
@@ -22,31 +11,14 @@ export default function Home({ allPostsData }) {
       </Head>
       <section className={utilStyles.headingMd}>
         <p>I'm building this web app for my Senior Project</p>
-        <p>
-          (This is a sample website - you'll be building a site like this on{" "}
-          <a href="https://nextjs.org/learn">our Next.js tutorial</a>.)
-        </p>
       </section>
       <section className={`${utilStyles.headingMd} ${utilStyles.padding1px}`}>
-        <h2 className={utilStyles.headingLg}>Testing Audio Streaming</h2>
-        <Link href={`/test`}>Over Here</Link>
+        <h2 className={utilStyles.headingLg}>Start Streaming</h2>
+        <Link href={`/host-stream`}>Over Here</Link> (or use the{" "}
+        <Link href={`/host-stream-complex`}>complex version</Link>)
         <h2 className={utilStyles.headingLg}>Listen to Recent Streams</h2>
-        <Link href={`/streams`}>View Streams</Link>
+        <Link href={`/view-streams`}>View Streams</Link>
       </section>
-      {/* <section className={`${utilStyles.headingMd} ${utilStyles.padding1px}`}>
-        <h2 className={utilStyles.headingLg}>Blog</h2>
-        <ul className={utilStyles.list}>
-          {allPostsData.map(({ id, date, title }) => (
-            <li className={utilStyles.listItem} key={id}>
-              <Link href={`/posts/${id}`}>{title}</Link>
-              <br />
-              <small className={utilStyles.lightText}>
-                <Date dateString={date} />
-              </small>
-            </li>
-          ))}
-        </ul>
-      </section> */}
     </Layout>
   );
 }
