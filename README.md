@@ -20,3 +20,7 @@ Thoughts on my progress as of 6/9/23:
         - then I started reading over MDN documentation on the JS built-in libraries for recording audio
         - and getting a much better understanding of the overall process and the code I was writing
     - By taking on the project by myself, I got to experience multiple areas of web stack development
+
+**Edit:**  
+The MongoDB database I used has been disabled for now, this is intentional, although it means the deployed web app won't work anymore.  
+When I resume working on this project the database will be restarted.
